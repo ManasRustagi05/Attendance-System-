@@ -1,0 +1,693 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Smart Fingerprint Attendance</title>
+<style>
+  /* ============================================================
+     GLOBAL / RESET
+     ============================================================ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root{
+    --bg: #0f1420;
+    --card-bg: #1a2233;
+    --card-bg-2: #202b40;
+    --accent: #4f8cff;
+    --accent-2: #38d996;
+    --danger: #ff5c6c;
+    --warning: #ffc857;
+    --text-main: #eef2f8;
+    --text-dim: #94a3b8;
+    --border: #2b3650;
+    --radius: 16px;
+  }
+
+  body{
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: linear-gradient(160deg, #0f1420 0%, #131a2b 100%);
+    color: var(--text-main);
+    min-height: 100vh;
+    padding: 16px;
+    padding-bottom: 40px;
+  }
+
+  .app-header{
+    text-align: center;
+    margin-bottom: 18px;
+  }
+  .app-header h1{
+    font-size: 1.4rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .app-header p{
+    color: var(--text-dim);
+    font-size: 0.8rem;
+    margin-top: 4px;
+  }
+
+  /* ============================================================
+     CARD LAYOUT
+     ============================================================ */
+  .card{
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  }
+  .card h2{
+    font-size: 1rem;
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .card h2 .emoji{ font-size: 1.1rem; }
+
+  /* ============================================================
+     CONNECTION SECTION
+     ============================================================ */
+  .conn-row{
+    display: flex;
+    gap: 8px;
+  }
+  .conn-row input{
+    flex: 1;
+  }
+
+  input[type="text"], input[type="number"]{
+    width: 100%;
+    background: var(--card-bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s ease;
+  }
+  input[type="text"]:focus, input[type="number"]:focus{
+    border-color: var(--accent);
+  }
+  input::placeholder{ color: var(--text-dim); }
+
+  label{
+    display: block;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+    margin-top: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+  label:first-of-type{ margin-top: 0; }
+
+  button{
+    cursor: pointer;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: transform 0.08s ease, opacity 0.2s ease;
+  }
+  button:active{ transform: scale(0.97); }
+  button:disabled{ opacity: 0.45; cursor: not-allowed; }
+
+  .btn-primary{
+    background: var(--accent);
+    color: #fff;
+  }
+  .btn-success{
+    background: var(--accent-2);
+    color: #06281c;
+  }
+  .btn-danger{
+    background: var(--danger);
+    color: #2b0508;
+  }
+  .btn-block{
+    width: 100%;
+    margin-top: 14px;
+  }
+  .btn-row{
+    display: flex;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  .btn-row button{ flex: 1; }
+
+  /* ============================================================
+     STATUS INDICATOR BOX
+     ============================================================ */
+  #statusBox{
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    margin-top: 12px;
+    transition: background 0.3s ease, color 0.3s ease;
+    background: #3a2a2a;
+    color: var(--danger);
+    border: 1px solid rgba(255,92,108,0.35);
+  }
+  #statusBox .dot{
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
+    flex-shrink: 0;
+  }
+  #statusBox.connecting{
+    background: #3a3420;
+    color: var(--warning);
+    border-color: rgba(255,200,87,0.35);
+  }
+  #statusBox.connecting .dot{
+    animation: pulse 1s infinite ease-in-out;
+  }
+  #statusBox.connected{
+    background: #1f3a2c;
+    color: var(--accent-2);
+    border-color: rgba(56,217,150,0.35);
+  }
+  @keyframes pulse{
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  /* ============================================================
+     ENROLLMENT PROGRESS
+     ============================================================ */
+  #enrollProgress{
+    display: none;
+    margin-top: 12px;
+    padding: 12px 14px;
+    background: var(--card-bg-2);
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    font-size: 0.85rem;
+    color: var(--accent);
+  }
+  #enrollProgress.show{ display: block; }
+
+  /* ============================================================
+     HARDWARE STATUS CHIPS (fingerprint / SD card / OLED)
+     ============================================================ */
+  #hwStatus{
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  #hwStatus.show{ display: flex; }
+  .hw-chip{
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.75rem;
+    padding: 6px 10px;
+    border-radius: 999px;
+    background: var(--card-bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-dim);
+  }
+  .hw-chip .dot{
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--danger);
+    box-shadow: 0 0 6px var(--danger);
+  }
+  .hw-chip.ok{ color: var(--accent-2); border-color: rgba(56,217,150,0.35); }
+  .hw-chip.ok .dot{ background: var(--accent-2); box-shadow: 0 0 6px var(--accent-2); }
+  .hw-chip.bad{ color: var(--danger); border-color: rgba(255,92,108,0.35); }
+  .hw-chip.bad .dot{ background: var(--danger); box-shadow: 0 0 6px var(--danger); }
+
+  /* ============================================================
+     LOG TABLE
+     ============================================================ */
+  .table-wrap{
+    overflow-x: auto;
+    max-height: 420px;
+    overflow-y: auto;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  table{
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+    min-width: 560px;
+  }
+  thead th{
+    position: sticky;
+    top: 0;
+    background: var(--card-bg-2);
+    text-align: left;
+    padding: 10px 12px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    font-size: 0.68rem;
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    z-index: 1;
+  }
+  tbody td{
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-main);
+  }
+  tbody tr:last-child td{ border-bottom: none; }
+  tbody tr.new-row{
+    animation: flashIn 1.2s ease;
+  }
+  @keyframes flashIn{
+    0% { background: rgba(79,140,255,0.35); }
+    100% { background: transparent; }
+  }
+  .empty-row td{
+    text-align: center;
+    color: var(--text-dim);
+    padding: 24px 12px;
+  }
+  .id-badge{
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    font-size: 0.75rem;
+  }
+
+  /* ============================================================
+     TOAST / LOG MESSAGES
+     ============================================================ */
+  #toast{
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--card-bg-2);
+    border: 1px solid var(--border);
+    color: var(--text-main);
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    max-width: 90vw;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    z-index: 100;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.4);
+  }
+  #toast.show{
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #toast.error{ border-color: var(--danger); color: var(--danger); }
+  #toast.success{ border-color: var(--accent-2); color: var(--accent-2); }
+
+  .row-2{
+    display: flex;
+    gap: 10px;
+  }
+  .row-2 > div{ flex: 1; }
+</style>
+</head>
+<body>
+
+  <div class="app-header">
+    <h1>🖐️ Smart Attendance</h1>
+    <p>ESP32 Fingerprint System &middot; WebSocket Control Panel</p>
+  </div>
+
+  <!-- ============================================================
+       CONNECTION CARD
+       ============================================================ -->
+  <div class="card">
+    <h2><span class="emoji">📡</span> Device Connection</h2>
+    <label for="ipInput">ESP32 IP Address</label>
+    <div class="conn-row">
+      <input type="text" id="ipInput" placeholder="e.g. 192.168.1.50" inputmode="decimal" autocomplete="off">
+      <button class="btn-primary" id="connectBtn" onclick="toggleConnection()">Connect</button>
+    </div>
+
+    <div id="statusBox">
+      <span class="dot"></span>
+      <span id="statusText">Disconnected</span>
+    </div>
+
+    <div id="hwStatus"></div>
+  </div>
+
+  <!-- ============================================================
+       USER MANAGEMENT CARD
+       ============================================================ -->
+  <div class="card">
+    <h2><span class="emoji">👤</span> User Management</h2>
+
+    <label for="userId">User ID (1-127)</label>
+    <input type="number" id="userId" min="1" max="127" placeholder="e.g. 12">
+
+    <label for="userName">Full Name</label>
+    <input type="text" id="userName" placeholder="e.g. John Smith">
+
+    <label for="userDept">Department</label>
+    <input type="text" id="userDept" placeholder="e.g. Engineering">
+
+    <div class="btn-row">
+      <button class="btn-success" id="enrollBtn" onclick="enrollUser()" disabled>➕ Enroll Fingerprint</button>
+      <button class="btn-danger" id="deleteBtn" onclick="deleteUser()" disabled>🗑️ Delete User</button>
+    </div>
+
+    <div id="enrollProgress"></div>
+  </div>
+
+  <!-- ============================================================
+       LIVE ATTENDANCE LOG CARD
+       ============================================================ -->
+  <div class="card">
+    <h2><span class="emoji">📋</span> Live Attendance Log</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Date</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody id="logTableBody">
+          <tr class="empty-row"><td colspan="5">No check-ins yet. Waiting for scans…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+<script>
+/* ================================================================
+   GLOBAL STATE
+   ================================================================ */
+let socket = null;
+let isConnected = false;
+let manualDisconnect = false;   // true when the user clicked Disconnect deliberately
+let reconnectTimer = null;
+
+// Tracks the last known hardware readiness reported by the ESP32.
+// Buttons stay disabled if the sensor or SD card isn't actually working,
+// even though the WebSocket connection itself is fine.
+let hwState = { fingerprint: true, sdcard: true, oled: true };
+
+const ipInput      = document.getElementById('ipInput');
+const connectBtn    = document.getElementById('connectBtn');
+const statusBox      = document.getElementById('statusBox');
+const statusText     = document.getElementById('statusText');
+const enrollBtn      = document.getElementById('enrollBtn');
+const deleteBtn      = document.getElementById('deleteBtn');
+const enrollProgress = document.getElementById('enrollProgress');
+const hwStatusBox    = document.getElementById('hwStatus');
+const logTableBody   = document.getElementById('logTableBody');
+
+// Persist last-used IP so the user doesn't have to retype it every time
+window.addEventListener('load', () => {
+  const savedIp = localStorage.getItem('esp32_ip');
+  if (savedIp) ipInput.value = savedIp;
+});
+
+/* ================================================================
+   TOAST HELPER
+   ================================================================ */
+let toastTimer = null;
+function showToast(msg, type = '') {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.className = 'show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { toast.className = ''; }, 3200);
+}
+
+/* ================================================================
+   STATUS UI HELPERS
+   ================================================================ */
+function setStatus(state, text) {
+  // state: 'connected' | 'connecting' | 'disconnected'
+  statusBox.className = state === 'connected' ? 'connected' : (state === 'connecting' ? 'connecting' : '');
+  statusText.textContent = text;
+
+  const controlsEnabled = state === 'connected';
+  enrollBtn.disabled = !controlsEnabled || !hwState.fingerprint || !hwState.sdcard;
+  deleteBtn.disabled = !controlsEnabled || !hwState.fingerprint;
+
+  if (state !== 'connected') {
+    hwStatusBox.classList.remove('show');
+  }
+
+  if (state === 'connected') {
+    connectBtn.textContent = 'Disconnect';
+    connectBtn.classList.remove('btn-primary');
+    connectBtn.classList.add('btn-danger');
+  } else {
+    connectBtn.textContent = state === 'connecting' ? 'Connecting…' : 'Connect';
+    connectBtn.classList.remove('btn-danger');
+    connectBtn.classList.add('btn-primary');
+  }
+}
+
+/* ================================================================
+   CONNECT / DISCONNECT
+   ================================================================ */
+function toggleConnection() {
+  if (isConnected) {
+    manualDisconnect = true;
+    if (socket) socket.close();
+    return;
+  }
+  connectToDevice();
+}
+
+function connectToDevice() {
+  const ip = ipInput.value.trim();
+  if (!ip) {
+    showToast('Please enter the ESP32 IP address', 'error');
+    return;
+  }
+
+  localStorage.setItem('esp32_ip', ip);
+  manualDisconnect = false;
+  clearTimeout(reconnectTimer);
+
+  const wsUrl = `ws://${ip}:81/`;
+  setStatus('connecting', `Connecting to ${ip}…`);
+
+  try {
+    socket = new WebSocket(wsUrl);
+  } catch (err) {
+    setStatus('disconnected', 'Invalid address');
+    showToast('Could not open WebSocket: ' + err.message, 'error');
+    return;
+  }
+
+  socket.onopen = () => {
+    isConnected = true;
+    setStatus('connected', `Connected · ${ip}`);
+    showToast('Connected to ESP32', 'success');
+  };
+
+  socket.onclose = () => {
+    isConnected = false;
+    setStatus('disconnected', 'Disconnected');
+    socket = null;
+    // Auto-retry unless the user explicitly disconnected
+    if (!manualDisconnect) {
+      showToast('Connection lost. Retrying in 3s…', 'error');
+      reconnectTimer = setTimeout(connectToDevice, 3000);
+    }
+  };
+
+  socket.onerror = () => {
+    setStatus('disconnected', 'Connection error');
+  };
+
+  socket.onmessage = (event) => {
+    handleIncomingMessage(event.data);
+  };
+}
+
+/* ================================================================
+   INCOMING MESSAGE ROUTER
+   ================================================================
+   Expected message "type" values from the ESP32:
+     "log"     -> live check-in event               -> prepend to table
+     "status"  -> enrollment progress / general info -> show in progress box + toast
+     "error"   -> error message                      -> toast (red)
+     "success" -> generic success ack                -> toast (green)
+   ================================================================ */
+function handleIncomingMessage(raw) {
+  let data;
+  try {
+    data = JSON.parse(raw);
+  } catch (e) {
+    console.warn('Non-JSON WS message:', raw);
+    return;
+  }
+
+  switch (data.type) {
+    case 'log':
+      addAttendanceRow(data);
+      break;
+
+    case 'device_status':
+      updateHwStatus(data);
+      break;
+
+    case 'status':
+      showEnrollProgress(data.message || 'Working…');
+      showToast(data.message || 'Status update');
+      break;
+
+    case 'success':
+      hideEnrollProgress();
+      showToast(data.message || 'Success', 'success');
+      break;
+
+    case 'error':
+      hideEnrollProgress();
+      showToast(data.message || 'An error occurred', 'error');
+      break;
+
+    default:
+      console.log('Unhandled message type:', data);
+  }
+}
+
+/* ================================================================
+   HARDWARE STATUS CHIPS (fingerprint / SD card / OLED)
+   Rendered from the "device_status" message the ESP32 sends right
+   after a WebSocket connection is established.
+   ================================================================ */
+function updateHwStatus(data) {
+  hwState = {
+    fingerprint: !!data.fingerprint,
+    sdcard: !!data.sdcard,
+    oled: !!data.oled
+  };
+
+  hwStatusBox.innerHTML = `
+    <span class="hw-chip ${hwState.fingerprint ? 'ok' : 'bad'}"><span class="dot"></span>Fingerprint</span>
+    <span class="hw-chip ${hwState.sdcard ? 'ok' : 'bad'}"><span class="dot"></span>SD Card</span>
+    <span class="hw-chip ${hwState.oled ? 'ok' : 'bad'}"><span class="dot"></span>OLED</span>
+  `;
+  hwStatusBox.classList.add('show');
+
+  // Re-apply button gating now that we know which peripherals actually work
+  enrollBtn.disabled = !isConnected || !hwState.fingerprint || !hwState.sdcard;
+  deleteBtn.disabled = !isConnected || !hwState.fingerprint;
+}
+
+/* ================================================================
+   ENROLLMENT PROGRESS BOX
+   ================================================================ */
+function showEnrollProgress(text) {
+  enrollProgress.textContent = '⏳ ' + text;
+  enrollProgress.classList.add('show');
+}
+function hideEnrollProgress() {
+  setTimeout(() => enrollProgress.classList.remove('show'), 1500);
+}
+
+/* ================================================================
+   USER ACTIONS: ENROLL / DELETE
+   ================================================================ */
+function sendJson(obj) {
+  if (!socket || socket.readyState !== WebSocket.OPEN) {
+    showToast('Not connected to device', 'error');
+    return false;
+  }
+  socket.send(JSON.stringify(obj));
+  return true;
+}
+
+function validateIdAndFields(requireNameDept) {
+  const id = parseInt(document.getElementById('userId').value, 10);
+  const name = document.getElementById('userName').value.trim();
+  const dept = document.getElementById('userDept').value.trim();
+
+  if (!id || id < 1 || id > 127) {
+    showToast('User ID must be between 1 and 127', 'error');
+    return null;
+  }
+  if (requireNameDept && (!name || !dept)) {
+    showToast('Name and Department are required', 'error');
+    return null;
+  }
+  return { id, name, dept };
+}
+
+function enrollUser() {
+  const fields = validateIdAndFields(true);
+  if (!fields) return;
+
+  const payload = { action: 'enroll', id: fields.id, name: fields.name, dept: fields.dept };
+  if (sendJson(payload)) {
+    showEnrollProgress('Enrollment started for ID ' + fields.id + '. Follow instructions on the device OLED.');
+  }
+}
+
+function deleteUser() {
+  const fields = validateIdAndFields(false);
+  if (!fields) return;
+
+  if (!confirm(`Delete user ID ${fields.id}? This cannot be undone.`)) return;
+
+  const payload = { action: 'delete', id: fields.id };
+  sendJson(payload);
+}
+
+/* ================================================================
+   LIVE ATTENDANCE TABLE
+   ================================================================ */
+function addAttendanceRow(data) {
+  // Remove the "no check-ins yet" placeholder row if present
+  const emptyRow = logTableBody.querySelector('.empty-row');
+  if (emptyRow) emptyRow.remove();
+
+  const tr = document.createElement('tr');
+  tr.className = 'new-row';
+  tr.innerHTML = `
+    <td><span class="id-badge">${escapeHtml(data.id)}</span></td>
+    <td>${escapeHtml(data.name || 'Unknown')}</td>
+    <td>${escapeHtml(data.dept || '-')}</td>
+    <td>${escapeHtml(data.date || '-')}</td>
+    <td>${escapeHtml(data.time || '-')}</td>
+  `;
+
+  // Prepend so the newest check-in is always on top
+  logTableBody.insertBefore(tr, logTableBody.firstChild);
+}
+
+// Basic HTML escaping to keep injected text safe inside the table
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+</script>
+</body>
+</html>
